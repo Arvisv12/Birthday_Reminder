@@ -3,15 +3,31 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+def email_authentication(func):
+    def wrapper(self, *args, **kwargs):
+        if not self.server:
+            self.connect_server()
+        return func(self, *args, **kwargs)
+    return wrapper
+
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
 class Person:
     def __init__(self, name):
         self.name = name
 
-class BirthdayReminder(Person):
+class BirthdayReminder(Person, metaclass=Singleton):
     def __init__(self, filename='data.txt'):
         super().__init__('Birthday Reminder')
         self.filename = filename
         self.birthdays = self.import_data()
+        self.server = None
 
     def import_data(self):
         try:
@@ -33,22 +49,27 @@ class BirthdayReminder(Person):
         today = datetime.datetime.today().strftime('%Y-%m-%d')
         return [b for b in self.birthdays if b['date'] == today]
 
-    def send_email(self):
+    @email_authentication
+    def send_email(self, name):
         try:
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login('birthdayreminder608@gmail.com', 'bfqv gvso bhgo wlnq')
             msg = MIMEMultipart()
             msg['From'] = 'birthdayreminder608@gmail.com'
             msg['To'] = 'arvydas.abar@gmail.com'
             msg['Subject'] = 'Today is a special day!'
-            message = f"{b['name']} has a birthday today!"
+            message = f"{name} has a birthday today!"
             msg.attach(MIMEText(message, 'plain'))
-            server.send_message(msg)
-            server.quit()
+            self.server.send_message(msg)
             print('Mail sent')
         except Exception as e:
             print(f"Error sending email: {e}")
+
+    def connect_server(self):
+        try:
+            self.server = smtplib.SMTP('smtp.gmail.com', 587)
+            self.server.starttls()
+            self.server.login('birthdayreminder608@gmail.com', 'bfqv gvso bhgo wlnq')
+        except Exception as e:
+            print(f"Error connecting to server: {e}")
 
     def export_data(self):
         with open(self.filename, 'w') as file:
@@ -65,4 +86,4 @@ if __name__ == '__main__':
     print("Today's reminders:")
     for b in reminder.get_reminders():
         print(f"{b['name']} has a birthday today!")
-        reminder.send_email()
+        reminder.send_email(b['name'])
